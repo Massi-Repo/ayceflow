@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AYCEflow · Log</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Inter:wght@400;600&display=swap');
+:root{--ink:#181821;--paper:#FAF6EF;--coral:#F2542D;--line:#ECE4D7;--muted:#76716A;--wasabi:#6F8F3E;--rosso:#B0331A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;padding:20px}
+.wrap{max-width:900px;margin:0 auto}
+.disp{font-family:'Bricolage Grotesque',system-ui}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+button{border:none;border-radius:10px;padding:9px 16px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px}
+.btn{background:var(--ink);color:#fff}
+select{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-family:inherit;background:#fff;font-size:13px}
+.riga{background:#fff;border:1px solid var(--line);border-left-width:4px;border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:13px}
+.ok{border-left-color:var(--wasabi)}
+.err{border-left-color:var(--rosso)}
+.info{border-left-color:var(--muted)}
+.quando{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tipo{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;background:var(--paper);border:1px solid var(--line)}
+pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11px;overflow:auto;margin:6px 0 0;max-height:160px}
+</style></head><body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="disp" style="font-size:22px;font-weight:800;color:var(--coral)">AYCEflow · Log</div>
+      <div style="font-size:12px;color:var(--muted)">Cosa è successo davvero — per capire i problemi senza indovinare</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <select id="filtro" onchange="carica()">
+        <option value="">Tutti gli eventi</option>
+        <option value="ordine_ok">Solo ordini riusciti</option>
+        <option value="ordine_errore">Solo errori</option>
+        <option value="tavolo_chiuso">Chiusure tavolo</option>
+      </select>
+      <button class="btn" onclick="carica()">↻ Aggiorna</button>
+      <a href="hub.html" style="font-size:12px;color:var(--muted)">← hub</a>
+    </div>
+  </div>
+  <div id="out"><p style="color:var(--muted);font-size:13px">Caricamento…</p></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+/* ============================================================================
+   log.html — mostra gli ultimi eventi registrati (ordini, errori, chiusure).
+   Serve a noi per il troubleshooting: invece di indovinare perché qualcosa non
+   è andato, si guarda qui.
+   ============================================================================ */
+const {SUPABASE_URL, SUPABASE_ANON_KEY, SLUG} = window.AYCE_CFG || {};
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const classe = t => t==="ordine_ok" ? "ok" : t==="ordine_errore" ? "err" : "info";
+
+async function carica() {
+  const out = document.getElementById("out");
+  out.innerHTML = '<p style="color:var(--muted);font-size:13px">Caricamento…</p>';
+  try {
+    let q = sb.from("log_eventi").select("*").order("creato_il",{ascending:false}).limit(100);
+    const f = document.getElementById("filtro").value;
+    if (f) q = q.eq("tipo", f);
+    const {data, error} = await q;
+    if (error) throw new Error(error.message);
+    if (!data.length) { out.innerHTML = '<p style="color:var(--muted);font-size:13px">Nessun evento registrato. Manda un ordine e ricarica.</p>'; return; }
+    out.innerHTML = data.map(e => `
+      <div class="riga ${classe(e.tipo)}">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="tipo">${esc(e.tipo)}</span>
+          <span style="font-weight:600">${esc(e.messaggio||"")}</span>
+          <span class="quando" style="margin-left:auto">${new Date(e.creato_il).toLocaleString("it-IT")}</span>
+        </div>
+        ${e.dati ? `<details><summary style="font-size:11px;color:var(--muted);cursor:pointer;margin-top:4px">dettagli</summary><pre>${esc(JSON.stringify(e.dati,null,2))}</pre></details>` : ""}
+      </div>`).join("");
+  } catch(e) {
+    out.innerHTML = `<div class="riga err">Errore: ${esc(e.message)}<br><span style="font-size:11px;color:var(--muted)">Hai rilanciato schema.sql? La tabella log_eventi è nuova.</span></div>`;
+  }
+}
+carica();
+</script>
+</body></html>

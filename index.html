@@ -35,10 +35,14 @@ button:disabled{cursor:not-allowed}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{display:inline-block;animation:spin 1s linear infinite}
 /* layout */
 .wrap{max-width:1100px;margin:0 auto;padding:0 16px}
-.grid2{display:grid;grid-template-columns:1fr;gap:12px}
-@media(min-width:600px){.grid2{grid-template-columns:1fr 1fr}}
+.grid2{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:640px){.grid2{grid-template-columns:1fr 1fr}}
 .layout{display:grid;grid-template-columns:1fr;gap:24px;padding-bottom:160px}
 @media(min-width:1024px){.layout{grid-template-columns:1fr 360px;padding-bottom:40px}}
+/* ⚠️ FONDAMENTALE: senza min-width:0 le colonne della griglia non si
+   restringono sotto la larghezza del contenuto (la barra categorie lunga
+   gonfiava tutto e i pulsanti finivano fuori schermo sul telefono). */
+.layout > *, .grid2 > *{min-width:0}
 .aside{display:none}@media(min-width:1024px){.aside{display:block;padding-top:16px}}
 /* categoria bar */
 .catbtn{flex:0 0 auto;padding:8px 16px;border-radius:999px;font-weight:700;font-size:14px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
@@ -70,18 +74,26 @@ const QR = new URLSearchParams(location.search).get("t");
 // ---- variabili di stato globali ----
 let sb, LOCALE=null, TAVOLO=null, CART=null, MENU=[], GIRI=[];
 let CONF={}, activeCat=null, sheetOpen=false;
-let seatedAt=Date.now(), nowTs=Date.now();
+let nowTs=Date.now();
 let sending=false, sendMsg={t:"",k:""};
 
 // ---- regole (lette dalla config del locale) ----
 const regola = id => (CONF.regole && CONF.regole[id]) || {attivo:true, maxVolte:{value:0,scope:"tavolo"}, maxPerGiro:0};
 const coperti = () => CART ? CART.coperti : 2;
 const scaled = mv => !mv.value ? Infinity : (mv.scope==="persona" ? mv.value*coperti() : mv.value);
+// conta i pezzi già mandati in cucina. IMPORTANTE: solo quelli di QUESTA cena,
+// cioè dal momento in cui il carrello attivo si è aperto. Così quando il
+// ristoratore chiude il tavolo, i limiti ripartono da zero per i nuovi clienti.
 function sentCount() {
   const m={};
-  GIRI.forEach(g => Object.entries(g.items||{}).forEach(([id,v]) => m[id]=(m[id]||0)+v.qty));
+  giriDiOra().forEach(g => Object.entries(g.items||{}).forEach(([id,v]) => m[id]=(m[id]||0)+v.qty));
   return m;
 }
+const giriDiOra = () => {
+  if(!CART) return [];
+  const da = new Date(CART.aperto_il||0).getTime();
+  return GIRI.filter(g => new Date(g.inviato_il).getTime() >= da);
+};
 const qtyInCart = id => (CART && CART.items && CART.items[id]) ? CART.items[id].qty : 0;
 function remaining(id) {
   const r=regola(id), mx=scaled(r.maxVolte);
@@ -100,9 +112,13 @@ function globals() {
   const maxGiro = (G.maxPezziScope==="persona" ? (G.maxPezziPerGiro||0)*coperti() : (G.maxPezziPerGiro||0)) || Infinity;
   const items = CART ? Object.entries(CART.items||{}).map(([id,v])=>({id:Number(id),...v})) : [];
   const count = items.reduce((n,i)=>n+i.qty, 0);
-  const lastAt = GIRI.length ? new Date(GIRI[0].inviato_il).getTime() : 0;
+  const gOra = giriDiOra();
+  const lastAt = gOra.length ? new Date(gOra[0].inviato_il).getTime() : 0;
   const cooldownLeft = Math.max(0, Math.ceil((lastAt+(G.cooldownMin||0)*60000-nowTs)/1000));
-  const tempoLeft = Math.max(0, (G.tempoTavoloMin||100)*60 - Math.floor((nowTs-seatedAt)/1000));
+  // il timer parte da quando il carrello si e' aperto (non dal caricamento della
+  // pagina!), se no bastava ricaricare per farlo ripartire da capo.
+  const apertoDa = CART ? new Date(CART.aperto_il).getTime() : nowTs;
+  const tempoLeft = Math.max(0, (G.tempoTavoloMin||100)*60 - Math.floor((nowTs-apertoDa)/1000));
   return {maxGiro, items, count, over:count>maxGiro, cooldownLeft, tempoLeft, blocked:(count>maxGiro||cooldownLeft>0||tempoLeft===0)};
 }
 
@@ -216,9 +232,10 @@ function bodyHTML() {
   const g = globals();
   const catbar = allCats.map(c=>`<button onclick="activeCat=this.dataset.c;render()" data-c="${esc(c)}" class="catbtn disp ${c===activeCat?'on':''}">${esc(c)}</button>`).join("");
   const cards = visible.map(p=>cardHTML(p)).join("");
-  const giriHTML = GIRI.length ? `<section style="margin-top:36px">
+  const gOra = giriDiOra();
+  const giriHTML = gOra.length ? `<section style="margin-top:36px">
     <h2 class="disp" style="font-size:20px;font-weight:800;margin:0 0 12px">Giri inviati</h2>
-    ${GIRI.map(gi=>`<div class="card" style="padding:16px;margin-bottom:10px">
+    ${gOra.map(gi=>`<div class="card" style="padding:16px;margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="disp" style="font-weight:800;font-size:18px">Giro ${gi.numero_giro}</span>
@@ -254,26 +271,27 @@ function bodyHTML() {
 
 function cardHTML(p) {
   const qty=qtyInCart(p.id), rem=remaining(p.id), so=rem===0, ev=isEvid(p.id), fav=isFav(p.id);
+  // badge piccolo sotto il nome (non piu' di fianco: rubava spazio al bottone)
   const badge = ev
-    ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--gold);color:#fff;flex:0 0 auto">in evidenza</span>`
+    ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--gold);color:#fff">in evidenza</span>`
     : rem===Infinity ? ""
-    : `<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;flex:0 0 auto;background:${so?'#F6E3DE':'#F0EFEA'};color:${so?'var(--coralDeep)':'var(--muted)'}">${so?'limite':'ancora '+rem}</span>`;
+    : `<span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px;background:${so?'#F6E3DE':'#F0EFEA'};color:${so?'var(--coralDeep)':'var(--muted)'}">${so?'limite raggiunto':'ancora '+rem}</span>`;
+  // controllo: bottone tondo grande (44px = comodo col pollice), sempre visibile
   const ctrl = qty===0
-    ? `<button onclick="modifica(${p.id},1)" ${so?'disabled':''} style="display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;font-weight:700;font-size:14px;background:${so?'var(--line)':'var(--ink)'};color:${so?'var(--muted)':'var(--paper)'}">＋ Aggiungi</button>`
-    : `<div style="display:flex;align-items:center;gap:10px;padding:4px 8px;border-radius:999px;background:var(--ink);color:var(--paper)">
-        <button onclick="modifica(${p.id},-1)" style="padding:6px;color:var(--paper)">－</button>
-        <span class="pop tab" style="font-weight:700;width:20px;text-align:center;color:var(--coral)">${qty}</span>
-        <button onclick="modifica(${p.id},1)" ${canAdd(p.id)?'':'disabled'} style="padding:6px;color:var(--paper);opacity:${canAdd(p.id)?1:.3}">＋</button>
+    ? `<button onclick="modifica(${p.id},1)" ${so?'disabled':''} class="touch"
+        style="border-radius:999px;font-weight:800;font-size:22px;line-height:1;background:${so?'var(--line)':'var(--ink)'};color:${so?'var(--muted)':'var(--paper)'}" aria-label="Aggiungi ${esc(p.name)}">＋</button>`
+    : `<div style="display:flex;align-items:center;gap:2px;border-radius:999px;background:var(--ink);color:var(--paper);padding:0 4px">
+        <button onclick="modifica(${p.id},-1)" class="touch" style="color:var(--paper);font-size:20px;font-weight:700;min-width:38px" aria-label="Togli">－</button>
+        <span class="pop tab" style="font-weight:800;min-width:22px;text-align:center;color:var(--coral);font-size:17px">${qty}</span>
+        <button onclick="modifica(${p.id},1)" ${canAdd(p.id)?'':'disabled'} class="touch" style="color:var(--paper);font-size:20px;font-weight:700;min-width:38px;opacity:${canAdd(p.id)?1:.3}" aria-label="Aggiungi">＋</button>
       </div>`;
-  return `<div class="card" style="padding:16px;display:flex;flex-direction:column;justify-content:space-between;opacity:${so?.55:1};${ev?'border:2px solid var(--gold)':''}">
-    <div>
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-        <h3 class="disp" style="font-weight:700;font-size:17px;line-height:1.15;margin:0">${fav?'★ ':''}${esc(p.name)}</h3>
-        ${badge}
-      </div>
-      ${p.description?`<p class="muted" style="font-size:13px;margin:4px 0 0;line-height:1.3">${esc(p.description)}</p>`:''}
+  return `<div class="card" style="padding:10px 12px;display:flex;align-items:center;gap:10px;opacity:${so?.6:1};${ev?'border:2px solid var(--gold)':''}">
+    <div style="flex:1;min-width:0">
+      <h3 class="disp" style="font-weight:700;font-size:16px;line-height:1.2;margin:0;overflow-wrap:anywhere">${fav?'★ ':''}${esc(p.name)}</h3>
+      ${p.description?`<p class="muted" style="font-size:12px;margin:2px 0 0;line-height:1.25;overflow-wrap:anywhere">${esc(p.description)}</p>`:''}
+      ${badge?`<div style="margin-top:4px">${badge}</div>`:''}
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">${ctrl}</div>
+    <div style="flex-shrink:0">${ctrl}</div>
   </div>`;
 }
 
@@ -351,10 +369,13 @@ setInterval(()=>{
     // leggo il tavolo dal qr_token (assegnato dal QR, non dall'utente)
     const {data:tav, error:e2} = await sb.from("tavoli").select("*").eq("qr_token",QR).single();
     if(e2||!tav) throw new Error(`QR token '${QR}' non trovato. Hai generato i tavoli con get-tavoli?`);
-    TAVOLO=tav; seatedAt=Date.now(); render();
+    TAVOLO=tav; render();
     document.title = (CONF.brand||"AYCEflow") + " · Tavolo " + tav.numero;
-    // carrello condiviso: trova o crea
-    const {data:cart} = await sb.rpc("carrello_del_tavolo",{p_tavolo:tav.id});
+    // carrello condiviso: trova o crea. Se la chiusura automatica e' attiva,
+    // passo i minuti: il server chiude da solo i tavoli rimasti aperti troppo.
+    const ca = CONF.chiusuraAuto||{};
+    const maxMin = ca.attivo ? (ca.minuti||120) : null;
+    const {data:cart} = await sb.rpc("carrello_del_tavolo",{p_tavolo:tav.id, p_max_minuti:maxMin});
     CART=cart;
     // storico giri di oggi
     const {data:giri} = await sb.from("giri").select("*").eq("tavolo_id",tav.id).order("numero_giro",{ascending:false});
