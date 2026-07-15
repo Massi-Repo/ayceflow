@@ -1,7 +1,13 @@
 <!DOCTYPE html>
 <html lang="it"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>AYCEflow</title>
+<!-- aspetto da "app vera" su mobile: barra colorata, avvio a schermo intero se aggiunto a home -->
+<meta name="theme-color" content="#181821">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AYCEflow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23F2542D'/%3E%3Ctext x='50' y='68' font-size='58' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3EA%3C/text%3E%3C/svg%3E">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&display=swap');
 :root{
@@ -12,6 +18,7 @@
   --body:'Inter',system-ui,sans-serif
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{overflow-x:hidden;max-width:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body)}
 .disp{font-family:var(--disp)}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
@@ -20,6 +27,10 @@ button:disabled{cursor:not-allowed}
 .noscroll::-webkit-scrollbar{display:none}
 .muted{color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+/* nascondi la formula su schermi molto stretti, cosi' l'header non sfora */
+.hide-narrow{display:none}@media(min-width:430px){.hide-narrow{display:inline}}
+/* bottoni "tocca" grandi abbastanza per il pollice (min 44px) */
+.touch{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 @keyframes pop{0%{transform:scale(.85)}60%{transform:scale(1.08)}100%{transform:scale(1)}}.pop{animation:pop .22s ease-out}
 @keyframes spin{to{transform:rotate(360deg)}}.spin{display:inline-block;animation:spin 1s linear infinite}
 /* layout */
@@ -165,20 +176,22 @@ function header() {
   const g=globals(), lowTime=g.tempoLeft<900, showCop=CONF.coperti&&CONF.coperti.attivo;
   return `<header style="position:sticky;top:0;z-index:20;background:var(--ink);color:var(--paper)">
     <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px">
-      <div style="display:flex;align-items:baseline;gap:10px;min-width:0">
-        <span class="disp" style="font-size:22px;font-weight:800;color:var(--coral);white-space:nowrap">${esc(CONF.brand||"AYCEflow")}</span>
-        <span class="disp" style="font-size:12px;font-weight:600;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(CONF.formula||"")}</span>
+  return `<header style="position:sticky;top:0;z-index:20;background:var(--ink);color:var(--paper)">
+    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;flex-wrap:wrap">
+      <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
+        <span class="disp" style="font-size:20px;font-weight:800;color:var(--coral);white-space:nowrap">${esc(CONF.brand||"AYCEflow")}</span>
+        <span class="disp hide-narrow" style="font-size:12px;font-weight:600;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(CONF.formula||"")}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span style="padding:5px 12px;border-radius:999px;background:var(--inkSoft);font-size:13px">
+        <span style="padding:4px 10px;border-radius:999px;background:var(--inkSoft);font-size:13px;white-space:nowrap">
           <span style="opacity:.6">Tavolo</span> <b>${esc(TAVOLO.numero)}</b>
         </span>
-        ${showCop ? `<span style="padding:5px 10px;border-radius:999px;background:var(--inkSoft);display:flex;align-items:center;gap:6px;font-size:13px">
-          <button onclick="setCoperti(-1)" style="color:var(--paper);font-weight:700;padding:2px 4px">−</button>
+        ${showCop ? `<span style="padding:4px 8px;border-radius:999px;background:var(--inkSoft);display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap">
+          <button onclick="setCoperti(-1)" style="color:var(--paper);font-weight:700;padding:2px 6px">−</button>
           <span class="tab" style="font-weight:700">👥${coperti()}</span>
-          <button onclick="setCoperti(1)" style="color:var(--paper);font-weight:700;padding:2px 4px">＋</button>
+          <button onclick="setCoperti(1)" style="color:var(--paper);font-weight:700;padding:2px 6px">＋</button>
         </span>` : ""}
-        <span class="tab" id="timePill" style="padding:5px 12px;border-radius:999px;background:${lowTime?'var(--coralDeep)':'var(--inkSoft)'};font-size:13px">
+        <span class="tab" id="timePill" style="padding:4px 10px;border-radius:999px;background:${lowTime?'var(--coralDeep)':'var(--inkSoft)'};font-size:13px;white-space:nowrap">
           ⏱ <b>${fmt(g.tempoLeft)}</b>
         </span>
       </div>
@@ -341,6 +354,7 @@ setInterval(()=>{
     const {data:tav, error:e2} = await sb.from("tavoli").select("*").eq("qr_token",QR).single();
     if(e2||!tav) throw new Error(`QR token '${QR}' non trovato. Hai generato i tavoli con get-tavoli?`);
     TAVOLO=tav; seatedAt=Date.now(); render();
+    document.title = (CONF.brand||"AYCEflow") + " · Tavolo " + tav.numero;
     // carrello condiviso: trova o crea
     const {data:cart} = await sb.rpc("carrello_del_tavolo",{p_tavolo:tav.id});
     CART=cart;
@@ -359,16 +373,33 @@ setInterval(()=>{
       return;
     }
     render();
-    // REALTIME: carrello condiviso (aggiorna su tutti i telefoni del tavolo)
-    sb.channel("cart-"+CART.id)
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"carrelli",filter:"id=eq."+CART.id},
-        p=>{CART=p.new; render();})
-      .subscribe();
-    // REALTIME: nuovi giri inviati
-    sb.channel("giri-"+tav.id)
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"giri",filter:"tavolo_id=eq."+tav.id},
-        p=>{GIRI.unshift(p.new); render();})
-      .subscribe();
+
+    // ---- REALTIME: carrello + giri condivisi in diretta ----
+    // sottoscrivo carrello (UPDATE) e giri (INSERT). Se la connessione cade,
+    // Supabase riprova da solo. In piu' tengo un "polling di sicurezza" leggero
+    // (ogni 4s) che ricarica il carrello, cosi' anche se un evento realtime si
+    // perde, entro pochi secondi si riallinea comunque.
+    function agganciaRealtime() {
+      sb.channel("cart-"+CART.id)
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"carrelli",filter:"id=eq."+CART.id},
+          p=>{ CART=p.new; render(); })
+        .subscribe((status)=>{ console.log("[realtime carrello]", status); });
+      sb.channel("giri-"+tav.id)
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"giri",filter:"tavolo_id=eq."+tav.id},
+          p=>{ if(!GIRI.some(x=>x.id===p.new.id)){ GIRI.unshift(p.new); render(); } })
+        .subscribe((status)=>{ console.log("[realtime giri]", status); });
+    }
+    agganciaRealtime();
+
+    // polling di sicurezza: rete di protezione se un evento realtime si perde
+    setInterval(async ()=>{
+      if(document.hidden) return;            // non sprecare quando l'app e' in background
+      try{
+        const {data:c} = await sb.from("carrelli").select("*").eq("id",CART.id).single();
+        if(c && JSON.stringify(c.items)!==JSON.stringify(CART.items)){ CART=c; render(); }
+      }catch(_){}
+    }, 4000);
+
   } catch(e) {
     app.innerHTML=`<div class="errbox">
       <h1>AYCEflow</h1>
