@@ -24,7 +24,7 @@ pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11p
 <div class="wrap">
   <div class="top">
     <div>
-      <div class="disp" style="font-size:22px;font-weight:800;color:var(--coral)">AYCEflow · Log</div>
+      <button onclick="vaiHub()" class="disp" style="font-size:22px;font-weight:800;color:var(--coral);background:none;border:none;padding:0;cursor:pointer;font-family:inherit">AYCEflow · Log</button>
       <div style="font-size:12px;color:var(--muted)">Cosa è successo davvero — per capire i problemi senza indovinare</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
@@ -35,7 +35,7 @@ pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11p
         <option value="tavolo_chiuso">Chiusure tavolo</option>
       </select>
       <button class="btn" onclick="carica()">↻ Aggiorna</button>
-      <a href="hub.html" style="font-size:12px;color:var(--muted)">← hub</a>
+      <button class="btn" onclick="vaiHub()">🏠 Hub</button>
     </div>
   </div>
   <div id="out"><p style="color:var(--muted);font-size:13px">Caricamento…</p></div>
@@ -49,7 +49,11 @@ pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11p
    Serve a noi per il troubleshooting: invece di indovinare perché qualcosa non
    è andato, si guarda qui.
    ============================================================================ */
-const {SUPABASE_URL, SUPABASE_ANON_KEY, SLUG} = window.AYCE_CFG || {};
+const {SUPABASE_URL, SUPABASE_ANON_KEY} = window.AYCE_CFG || {};
+// ?l=codice  -> log del SOLO locale del ristoratore
+// niente ?l= -> log di tutti (lo usa il nostro hub Pezzanera)
+const SLUG = new URLSearchParams(location.search).get("l") || "";
+function vaiHub(){ location.href = SLUG ? "hub.html" : "admin-pezzanera.html"; }
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const classe = t => t==="ordine_ok" ? "ok" : t==="ordine_errore" ? "err" : "info";
@@ -59,6 +63,11 @@ async function carica() {
   out.innerHTML = '<p style="color:var(--muted);font-size:13px">Caricamento…</p>';
   try {
     let q = sb.from("log_eventi").select("*").order("creato_il",{ascending:false}).limit(100);
+    // se sono un ristoratore, vedo SOLO gli eventi del mio locale
+    if (SLUG) {
+      const {data:loc} = await sb.from("locali").select("id").eq("slug",SLUG).single();
+      if (loc) q = q.eq("locale_id", loc.id);
+    }
     const f = document.getElementById("filtro").value;
     if (f) q = q.eq("tipo", f);
     const {data, error} = await q;

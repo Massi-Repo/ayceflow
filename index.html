@@ -68,8 +68,10 @@ button:disabled{cursor:not-allowed}
    Le credenziali Pienissimo non sono qui: le usa la edge function "send-order".
    SLUG del locale: viene da config.js (non più nell'URL).
    ============================================================================ */
-const {SUPABASE_URL, SUPABASE_ANON_KEY, SLUG} = window.AYCE_CFG || {};
+const {SUPABASE_URL, SUPABASE_ANON_KEY} = window.AYCE_CFG || {};
 const QR = new URLSearchParams(location.search).get("t");
+// SLUG non e' piu' in config: lo ricaviamo dal locale del tavolo (multi-cliente).
+let SLUG = null;
 
 // ---- variabili di stato globali ----
 let sb, LOCALE=null, TAVOLO=null, CART=null, MENU=[], GIRI=[];
@@ -162,6 +164,8 @@ async function invia() {
     sendMsg = {t:"Ordine #"+res.id_ordine+" in cucina", k:"ok"};
     setTimeout(()=>{if(sendMsg.k==="ok"){sendMsg={t:"",k:""};render();}}, 5000);
   } catch(e) {
+    // se il server dice "tavolo chiuso", mostro la schermata di saluto
+    if(/tavolo chiuso/i.test(e.message||"")){ CHIUSO=true; app.innerHTML=schermataChiuso(); return; }
     sendMsg = {t:e.message||"Errore invio", k:"err"};
   }
   sending=false; render();
@@ -187,13 +191,32 @@ function bootHTML(msg) {
     <p class="muted">${esc(msg)}</p>
     <span class="spin" style="font-size:28px;color:var(--coral)">◠</span></div>`;
 }
+// schermata di saluto quando il ristoratore ha chiuso il tavolo
+function schermataChiuso() {
+  return `<div class="errbox" style="margin-top:100px">
+    <div style="font-size:44px">🙏</div>
+    <h1 class="disp" style="color:var(--coral);margin-top:8px">Grazie!</h1>
+    <p style="font-size:16px;font-weight:600;margin:8px 0 4px">Questo tavolo è stato chiuso.</p>
+    <p class="muted" style="font-size:14px">Speriamo sia stato tutto buono. A presto! 🍽️</p>
+  </div>`;
+}
+// schermata quando la licenza del locale è sospesa/scaduta (blocco lato nostro)
+function schermataBloccoLicenza(L) {
+  return `<div class="errbox" style="margin-top:100px">
+    <div style="font-size:40px">🔒</div>
+    <h1 class="disp" style="color:var(--coral);margin-top:8px">${esc((L&&L.nome)||"AYCEflow")}</h1>
+    <p style="font-size:15px;font-weight:600;margin:8px 0 4px">Servizio momentaneamente non disponibile.</p>
+    <p class="muted" style="font-size:13px">Il personale è stato avvisato.</p>
+  </div>`;
+}
 
 function header() {
   const g=globals(), lowTime=g.tempoLeft<900, showCop=CONF.coperti&&CONF.coperti.attivo;
   return `<header style="position:sticky;top:0;z-index:20;background:var(--ink);color:var(--paper)">
     <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;flex-wrap:wrap">
       <div style="display:flex;align-items:baseline;gap:8px;min-width:0">
-        <span class="disp" style="font-size:20px;font-weight:800;color:var(--coral);white-space:nowrap">${esc(CONF.brand||"AYCEflow")}</span>
+        <!-- logo cliccabile: su un tavolo = ricarica la pagina (torna in cima/aggiorna) -->
+        <button onclick="location.reload()" class="disp" style="font-size:20px;font-weight:800;color:var(--coral);white-space:nowrap;padding:0" aria-label="Ricarica">${esc(CONF.brand||"AYCEflow")}</button>
         <span class="disp hide-narrow" style="font-size:12px;font-weight:600;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(CONF.formula||"")}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -357,36 +380,66 @@ setInterval(()=>{
 },1000);
 
 // ======================================================= INIT =================
+// stato "tavolo chiuso": quando true, mostro il messaggio di saluto e blocco tutto
+let CHIUSO = false;
+
 (async function init(){
   render(); // schermata di boot immediata
   if(!SUPABASE_URL||SUPABASE_URL.includes("INCOLLA")||!QR) return;
   try {
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    // leggo locale (config pubblica: brand, regole, banner…)
-    const {data:loc, error:e1} = await sb.from("locali").select("*").eq("slug",SLUG).single();
-    if(e1||!loc) throw new Error(`Locale '${SLUG}' non trovato nel database. Hai lanciato seed.sql su Supabase?`);
-    LOCALE=loc; CONF=loc.config||{};
-    // leggo il tavolo dal qr_token (assegnato dal QR, non dall'utente)
+
+    // 1) dal QR ricavo il TAVOLO, e dal tavolo il LOCALE (multi-cliente: niente
+    //    slug in config, il QR sa gia' a che locale appartiene).
     const {data:tav, error:e2} = await sb.from("tavoli").select("*").eq("qr_token",QR).single();
-    if(e2||!tav) throw new Error(`QR token '${QR}' non trovato. Hai generato i tavoli con get-tavoli?`);
+    if(e2||!tav) throw new Error(`QR '${QR}' non valido. Genera i tavoli dal backoffice.`);
+    const {data:loc, error:e1} = await sb.from("locali").select("*").eq("id",tav.locale_id).single();
+    if(e1||!loc) throw new Error("Locale del tavolo non trovato.");
+    LOCALE=loc; CONF=loc.config||{}; SLUG=loc.slug;
+
+    // 2) LICENZA: se il locale e' spento o scaduto, mi fermo qui.
+    if(loc.licenza_attiva===false || (loc.licenza_scadenza && loc.licenza_scadenza < new Date().toISOString().slice(0,10))){
+      app.innerHTML = schermataBloccoLicenza({nome:loc.nome}); return;
+    }
+
     TAVOLO=tav; render();
     document.title = (CONF.brand||"AYCEflow") + " · Tavolo " + tav.numero;
-    // carrello condiviso: trova o crea. Se la chiusura automatica e' attiva,
-    // passo i minuti: il server chiude da solo i tavoli rimasti aperti troppo.
-    const ca = CONF.chiusuraAuto||{};
-    const maxMin = ca.attivo ? (ca.minuti||120) : null;
-    const {data:cart} = await sb.rpc("carrello_del_tavolo",{p_tavolo:tav.id, p_max_minuti:maxMin});
-    CART=cart;
-    // storico giri di oggi
+
+    // 4) LOGICA DI APERTURA SICURA (il fix del buco):
+    //    - guardo se c'e' un carrello ATTIVO (funzione che NON crea mai nulla)
+    //    - questa scheda ricorda in sessionStorage l'id del carrello a cui si e'
+    //      agganciata (chiave per tavolo). muore quando chiudi la scheda.
+    const chiaveSess = "ayce_cart_"+tav.id;
+    const cartRicordato = sessionStorage.getItem(chiaveSess);
+    let {data:attivo} = await sb.rpc("carrello_attivo",{p_tavolo:tav.id});
+    attivo = Array.isArray(attivo)?attivo[0]:attivo;
+
+    if(attivo){
+      // c'e' un carrello attivo -> mi ci aggancio (che sia il mio o dei compagni di tavolo)
+      CART = attivo;
+      sessionStorage.setItem(chiaveSess, attivo.id);
+    } else if(cartRicordato){
+      // NIENTE carrello attivo MA la mia scheda ne aveva uno -> il ristoratore
+      // ha chiuso mentre ero "dentro". Non riparto: mostro il saluto.
+      CHIUSO = true;
+      app.innerHTML = schermataChiuso(); return;
+    } else {
+      // scheda pulita + nessun carrello attivo -> sono un cliente NUOVO: apro il tavolo
+      const {data:nuovo} = await sb.rpc("apri_tavolo",{p_tavolo:tav.id});
+      CART = Array.isArray(nuovo)?nuovo[0]:nuovo;
+      sessionStorage.setItem(chiaveSess, CART.id);
+    }
+
+    // storico giri
     const {data:giri} = await sb.from("giri").select("*").eq("tavolo_id",tav.id).order("numero_giro",{ascending:false});
     GIRI=giri||[];
+
     // menù via edge function (le creds non escono mai dal server)
     try {
       const m = await fn("get-menu",{slug:SLUG});
       MENU=m.menu||[];
     } catch(e) {
       MENU=[];
-      // mostro lo stesso l'interfaccia, con avviso
       app.innerHTML=`<div class="errbox"><h1>AYCEflow</h1>
         <div class="errmsg">Menù non disponibile: ${esc(e.message)}<br>Assicurati che la funzione <b>get-menu</b> sia deployata su Supabase.</div></div>`;
       return;
@@ -394,14 +447,16 @@ setInterval(()=>{
     render();
 
     // ---- REALTIME: carrello + giri condivisi in diretta ----
-    // sottoscrivo carrello (UPDATE) e giri (INSERT). Se la connessione cade,
-    // Supabase riprova da solo. In piu' tengo un "polling di sicurezza" leggero
-    // (ogni 4s) che ricarica il carrello, cosi' anche se un evento realtime si
-    // perde, entro pochi secondi si riallinea comunque.
     function agganciaRealtime() {
       sb.channel("cart-"+CART.id)
+        // UPDATE del carrello: cambia il contenuto in diretta su tutti i telefoni
         .on("postgres_changes",{event:"UPDATE",schema:"public",table:"carrelli",filter:"id=eq."+CART.id},
-          p=>{ CART=p.new; render(); })
+          p=>{
+            // se il carrello viene DISATTIVATO (ristoratore chiude) -> tutti i
+            // telefoni collegati mostrano "tavolo chiuso" all'istante, senza refresh.
+            if(p.new.attivo===false){ CHIUSO=true; app.innerHTML=schermataChiuso(); return; }
+            CART=p.new; render();
+          })
         .subscribe((status)=>{ console.log("[realtime carrello]", status); });
       sb.channel("giri-"+tav.id)
         .on("postgres_changes",{event:"INSERT",schema:"public",table:"giri",filter:"tavolo_id=eq."+tav.id},
@@ -412,10 +467,11 @@ setInterval(()=>{
 
     // polling di sicurezza: rete di protezione se un evento realtime si perde
     setInterval(async ()=>{
-      if(document.hidden) return;            // non sprecare quando l'app e' in background
+      if(document.hidden||CHIUSO) return;
       try{
-        const {data:c} = await sb.from("carrelli").select("*").eq("id",CART.id).single();
-        if(c && JSON.stringify(c.items)!==JSON.stringify(CART.items)){ CART=c; render(); }
+        const {data:c} = await sb.from("carrelli").select("*").eq("id",CART.id).maybeSingle();
+        if(!c || c.attivo===false){ CHIUSO=true; app.innerHTML=schermataChiuso(); return; }
+        if(JSON.stringify(c.items)!==JSON.stringify(CART.items)){ CART=c; render(); }
       }catch(_){}
     }, 4000);
 

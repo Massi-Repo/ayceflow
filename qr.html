@@ -25,7 +25,7 @@ button{border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:p
 <div class="wrap">
   <div class="topbar">
     <div>
-      <div class="disp" style="font-size:22px;font-weight:800;color:var(--coral)">AYCEflow · QR Tavoli</div>
+      <button onclick="vaiHub()" class="disp" style="font-size:22px;font-weight:800;color:var(--coral);background:none;border:none;padding:0;cursor:pointer;font-family:inherit">AYCEflow · QR Tavoli</button>
       <div style="font-size:12px;color:var(--muted)">Genera e stampa i QR da mettere sui tavoli</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-left:auto">
@@ -36,7 +36,7 @@ button{border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:p
       <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:0">
         <button class="btn-primary" onclick="genera()">📱 Genera QR</button>
         <button class="btn-sec" onclick="window.print()">🖨 Stampa</button>
-        <a href="hub.html" style="font-size:12px;color:var(--muted)">← hub</a>
+        <button onclick="vaiHub()" style="background:var(--ink);color:#fff">🏠 Hub</button>
       </div>
     </div>
   </div>
@@ -54,7 +54,10 @@ button{border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:p
    Se la funzione non è ancora deployata, mostra un errore chiaro.
    I QR usano api.qrserver.com: nessuna libreria JS, funziona sempre in stampa.
    ============================================================================ */
-const {SUPABASE_URL, SUPABASE_ANON_KEY, SLUG} = window.AYCE_CFG || {};
+const {SUPABASE_URL, SUPABASE_ANON_KEY} = window.AYCE_CFG || {};
+// il locale arriva dall'area ristoratore (?l=codice): ognuno genera solo i SUOI QR
+const SLUG = new URLSearchParams(location.search).get("l") || "";
+function vaiHub(){ location.href = "hub.html"; }
 // pre-compila l'URL col dominio attuale se siamo già su Vercel
 document.getElementById("base").value = location.origin === "null" ? "" : location.origin;
 

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AYCEflow · Pezzanera</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap');
+:root{--ink:#181821;--inkSoft:#262630;--paper:#FAF6EF;--coral:#F2542D;--wasabi:#6F8F3E;--gold:#E0A100;--line:#ECE4D7;--muted:#76716A;--rosso:#B0331A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif}
+.disp{font-family:'Bricolage Grotesque',system-ui}
+.wrap{max-width:1000px;margin:0 auto;padding:24px 16px}
+.center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;width:100%}
+input,select{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;background:#fff}
+label{font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px}
+button{border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px}
+.btn{background:var(--coral);color:#fff}.btn-ink{background:var(--ink);color:#fff}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+.ok{background:#EEF3E6;color:var(--wasabi)}.err{background:#FDE8E1;color:var(--rosso)}.warn{background:#FDF3DC;color:#8A6400}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:11px;text-transform:uppercase;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.topbar{background:var(--ink);color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.msg{padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:12px}
+</style></head><body>
+
+<!-- LOGIN MASTER -->
+<div class="center" id="login">
+  <div class="card" style="max-width:400px">
+    <h1 class="disp" style="font-size:32px;font-weight:800;color:var(--coral);margin:0">AYCEflow</h1>
+    <p style="margin:2px 0 20px;color:var(--muted);font-size:14px">Pannello <b>Pezzanera</b> — solo interno</p>
+    <label>Master PIN</label>
+    <input id="master" type="password" inputmode="numeric" autofocus onkeydown="if(event.key==='Enter')entra()">
+    <button class="btn" style="width:100%;margin-top:14px" onclick="entra()">Entra →</button>
+    <div id="lmsg" style="margin-top:10px"></div>
+    <p style="font-size:11px;color:var(--muted);margin-top:14px">Questo pannello gestisce TUTTI i clienti. Non condividerlo con i ristoratori: loro hanno <b>hub.html</b>.</p>
+  </div>
+</div>
+
+<!-- PANNELLO -->
+<div id="pannello" style="display:none">
+  <div class="topbar">
+    <button onclick="location.reload()" class="disp" style="font-weight:800;font-size:20px;color:var(--coral);background:none;padding:0">AYCEflow · Pezzanera</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a href="log.html" style="color:#fff;text-decoration:none;background:rgba(255,255,255,.12);padding:8px 12px;border-radius:8px;font-size:13px;font-weight:700">📋 Log globale</a>
+      <button onclick="esci()" style="background:rgba(255,255,255,.12);color:#fff;font-size:13px">Esci</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="msg"></div>
+
+    <div class="card" style="margin-bottom:16px">
+      <h2 class="disp" style="font-size:17px;margin:0 0 4px">🏢 Locali clienti</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Accendi/spegni la licenza o imposta una scadenza. Se spenta, AYCEflow di quel locale si blocca.</p>
+      <div style="overflow-x:auto">
+        <table id="tabella"><tbody><tr><td style="color:var(--muted)">Caricamento…</td></tr></tbody></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="disp" style="font-size:17px;margin:0 0 4px">➕ Nuovo cliente</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 14px">
+        Gli account si creano a mano dal SQL Editor di Supabase (le credenziali Pienissimo non passano dal browser, per sicurezza).
+        Compila qui i dati: ti genero la query da incollare.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Codice locale (slug)</label><input id="n_slug" placeholder="es. sakura"></div>
+        <div><label>Nome locale</label><input id="n_nome" placeholder="es. Sakura Sushi"></div>
+        <div><label>PIN del ristoratore</label><input id="n_pin" placeholder="es. 1234"></div>
+        <div><label>Scadenza licenza (opzionale)</label><input id="n_scad" type="date"></div>
+        <div><label>Pienissimo: id_multi</label><input id="n_idmulti" placeholder="es. 6625"></div>
+        <div><label>Pienissimo: schema</label><input id="n_schema" placeholder="es. user_5901"></div>
+        <div><label>Pienissimo: cod_attivazione</label><input id="n_cod" placeholder="es. SVC01"></div>
+        <div><label>Pienissimo: utente</label><input id="n_utente" placeholder="es. maxtest"></div>
+        <div><label>Pienissimo: password</label><input id="n_psw" placeholder="es. 1234"></div>
+      </div>
+      <button class="btn-ink" style="margin-top:12px" onclick="generaSql()">Genera query SQL</button>
+      <pre id="sqlout" style="display:none;background:var(--ink);color:#eee;padding:12px;border-radius:10px;font-size:11px;overflow:auto;margin-top:12px"></pre>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+/* ============================================================================
+   admin-pezzanera.html — IL NOSTRO hub (Pezzanera), separato da quello cliente.
+   Qui vediamo TUTTI i locali, gestiamo le licenze (il "rubinetto"
+   dell'abbonamento) e generiamo la query per creare un cliente nuovo.
+   Protetto dal MASTER PIN, verificato lato server (funzione verifica_master).
+   ============================================================================ */
+const {SUPABASE_URL, SUPABASE_ANON_KEY} = window.AYCE_CFG || {};
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let MASTER = "";
+
+// se ho gia' fatto login in questa scheda, rientro
+const salv = sessionStorage.getItem("ayce_master");
+if(salv){ MASTER = salv; apri(); }
+
+async function entra(){
+  const pin = document.getElementById("master").value.trim();
+  const m = document.getElementById("lmsg");
+  m.textContent = "Verifica…";
+  try{
+    const {data:ok, error} = await sb.rpc("verifica_master",{p_pin:pin});
+    if(error) throw new Error(error.message);
+    if(!ok){ m.innerHTML='<span class="badge err">PIN errato</span>'; return; }
+    MASTER = pin; sessionStorage.setItem("ayce_master", pin);
+    m.textContent=""; apri();
+  }catch(e){ m.innerHTML='<span class="badge err">'+esc(e.message)+'</span>'; }
+}
+function esci(){ sessionStorage.removeItem("ayce_master"); location.reload(); }
+
+async function apri(){
+  document.getElementById("login").style.display="none";
+  document.getElementById("pannello").style.display="block";
+  carica();
+}
+
+async function carica(){
+  const tb = document.querySelector("#tabella tbody");
+  try{
+    const {data, error} = await sb.rpc("admin_locali",{p_master:MASTER});
+    if(error) throw new Error(error.message);
+    if(!data.length){ tb.innerHTML='<tr><td style="color:var(--muted)">Nessun locale. Creane uno qui sotto.</td></tr>'; return; }
+    const oggi = new Date().toISOString().slice(0,10);
+    tb.innerHTML = `<tr><th>Locale</th><th>Codice</th><th>Licenza</th><th>Scadenza</th><th></th></tr>` +
+      data.map(l=>{
+        const scaduta = l.licenza_scadenza && l.licenza_scadenza < oggi;
+        const stato = !l.licenza_attiva ? '<span class="badge err">sospesa</span>'
+                    : scaduta ? '<span class="badge warn">scaduta</span>'
+                    : '<span class="badge ok">attiva</span>';
+        return `<tr>
+          <td><b>${esc(l.nome)}</b></td>
+          <td><code style="font-size:12px">${esc(l.slug)}</code></td>
+          <td>${stato}</td>
+          <td><input type="date" value="${l.licenza_scadenza||""}" id="sc_${esc(l.slug)}" style="width:150px;font-size:12px;padding:5px 8px"></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn-sm" style="background:${l.licenza_attiva?'var(--rosso)':'var(--wasabi)'};color:#fff"
+              onclick="licenza('${esc(l.slug)}', ${!l.licenza_attiva})">${l.licenza_attiva?'Sospendi':'Attiva'}</button>
+            <button class="btn-sm btn-ink" onclick="licenza('${esc(l.slug)}', ${l.licenza_attiva})">Salva data</button>
+            <a href="log.html?l=${encodeURIComponent(l.slug)}" class="btn-sm" style="background:var(--paper);border:1px solid var(--line);text-decoration:none;color:var(--ink);padding:6px 12px;border-radius:8px;font-weight:700">Log</a>
+          </td>
+        </tr>`;
+      }).join("");
+  }catch(e){
+    tb.innerHTML = `<tr><td style="color:var(--rosso)">Errore: ${esc(e.message)}</td></tr>`;
+  }
+}
+
+async function licenza(slug, attiva){
+  const sc = document.getElementById("sc_"+slug);
+  const scad = sc && sc.value ? sc.value : null;
+  try{
+    const {data:esito, error} = await sb.rpc("imposta_licenza",{p_master:MASTER,p_slug:slug,p_attiva:attiva,p_scadenza:scad});
+    if(error) throw new Error(error.message);
+    if(esito!=="ok") throw new Error(esito);
+    mostra(`✓ Licenza di ${slug} aggiornata`, "ok");
+    carica();
+  }catch(e){ mostra("✗ "+e.message, "err"); }
+}
+
+function mostra(t, cls){
+  const m=document.getElementById("msg");
+  m.innerHTML = `<div class="msg" style="background:${cls==="ok"?"#EEF3E6":"#FDE8E1"};color:${cls==="ok"?"var(--wasabi)":"var(--rosso)"}">${esc(t)}</div>`;
+  setTimeout(()=>m.innerHTML="", 4000);
+}
+
+// genera la query per creare un cliente nuovo (da incollare nel SQL Editor)
+function generaSql(){
+  const v = id => (document.getElementById(id).value||"").trim().replace(/'/g,"''");
+  const slug=v("n_slug"), nome=v("n_nome"), pin=v("n_pin")||"0000", scad=v("n_scad");
+  if(!slug||!nome){ mostra("Servono almeno codice e nome", "err"); return; }
+  const sql = `-- AYCEflow: nuovo cliente "${nome}"
+insert into locali (slug, nome, licenza_attiva, licenza_scadenza, config) values (
+  '${slug}', '${nome}', true, ${scad?`'${scad}'`:'null'},
+  jsonb_build_object(
+    'brand','${nome}', 'formula','All You Can Eat', 'admin_pin','${pin}',
+    'app_versione','3.0.37',
+    'global', jsonb_build_object('cooldownMin',0,'maxPezziPerGiro',8,'maxPezziScope','tavolo','tempoTavoloMin',100),
+    'coperti', jsonb_build_object('attivo',false),
+    'chiusuraAuto', jsonb_build_object('attivo',false,'minuti',120),
+    'preferiti', '[]'::jsonb, 'evidenza', '[]'::jsonb,
+    'banner', jsonb_build_object('attivo',false,'img','','testo','','link',''),
+    'regole', '{}'::jsonb
+  )
+) on conflict (slug) do nothing;
+
+insert into locali_secret (locale_id, pn_id_multi, pn_schema, pn_cod_attivazione, pn_utente, pn_psw)
+  select id, '${v("n_idmulti")}', '${v("n_schema")}', '${v("n_cod")}', '${v("n_utente")}', '${v("n_psw")}'
+  from locali where slug='${slug}'
+on conflict (locale_id) do update set
+  pn_id_multi=excluded.pn_id_multi, pn_schema=excluded.pn_schema,
+  pn_cod_attivazione=excluded.pn_cod_attivazione, pn_utente=excluded.pn_utente, pn_psw=excluded.pn_psw;
+
+-- Poi: il ristoratore entra su hub.html con codice "${slug}" e PIN "${pin}",
+-- va su "Genera QR tavoli" e i suoi tavoli si sincronizzano da Pienissimo.`;
+  const out=document.getElementById("sqlout");
+  out.style.display="block"; out.textContent=sql;
+}
+</script>
+</body></html>
