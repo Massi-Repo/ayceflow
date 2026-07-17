@@ -218,10 +218,10 @@ async function entra() {
 // torna all'hub del ristoratore
 function vaiHub(){ location.href = "hub.html"; }
 
+// esci sul serio: butto via la sessione del ristoratore e torno all'area login
 function logout() {
-  document.getElementById("loginScreen").style.display="block";
-  document.getElementById("editScreen").style.display="none";
-  document.getElementById("pin").value="";
+  sessionStorage.removeItem("ayce_ristoratore");
+  location.href = "hub.html";
 }
 
 // ---- popola form ----

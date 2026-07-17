@@ -28,7 +28,8 @@ pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11p
       <button onclick="vaiHub()" class="disp" style="font-size:22px;font-weight:800;color:var(--coral);background:none;border:none;padding:0;cursor:pointer;font-family:inherit">AYCEflow · Log</button>
       <div style="font-size:12px;color:var(--muted)" id="sott">Cosa è successo davvero — per capire i problemi senza indovinare</div>
     </div>
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="localeSel" onchange="carica()" style="display:none"></select>
       <select id="filtro" onchange="carica()">
         <option value="">Tutti gli eventi</option>
         <option value="ordine_ok">Solo ordini riusciti</option>
@@ -37,6 +38,7 @@ pre{background:var(--ink);color:#eee;padding:8px;border-radius:8px;font-size:11p
       </select>
       <button class="btn" onclick="carica()">↻ Aggiorna</button>
       <button class="btn" onclick="vaiHub()">🏠 Hub</button>
+      <button onclick="esci()" style="background:var(--paper);border:1px solid var(--line);color:var(--muted)">Esci</button>
     </div>
   </div>
   <div id="out"><p style="color:var(--muted);font-size:13px">Caricamento…</p></div>
@@ -72,11 +74,20 @@ const classe = t => t==="ordine_ok" ? "ok" : t==="ordine_errore" ? "err" : "info
 const nomeLocale = id => { const l = NOMI[id]; return l ? l.nome : (id ? "?" : "—"); };
 
 // mappa id-locale -> nome, cosi' nel log globale si vede DI CHI e' l'evento
-let NOMI = {};
+let NOMI = {};        // id locale -> {nome, slug}
+let LOCALI = [];      // elenco per la tendina
 async function caricaNomi(){
   try{
-    const {data} = await sb.from("locali").select("id,nome,slug");
-    (data||[]).forEach(l=>{ NOMI[l.id] = {nome:l.nome, slug:l.slug}; });
+    const {data} = await sb.from("locali").select("id,nome,slug").order("nome");
+    LOCALI = data||[];
+    LOCALI.forEach(l=>{ NOMI[l.id] = {nome:l.nome, slug:l.slug}; });
+    // la tendina serve solo a noi: il ristoratore ha un locale solo
+    if(PEZZANERA && LOCALI.length){
+      const sel = document.getElementById("localeSel");
+      sel.style.display = "";
+      sel.innerHTML = '<option value="">🏢 Tutti i locali</option>' +
+        LOCALI.map(l=>`<option value="${esc(l.id)}">${esc(l.nome)}</option>`).join("");
+    }
   }catch(_){}
 }
 
@@ -86,10 +97,13 @@ async function carica() {
   try {
     if(!Object.keys(NOMI).length) await caricaNomi();
     let q = sb.from("log_eventi").select("*").order("creato_il",{ascending:false}).limit(100);
-    // se sono un ristoratore, vedo SOLO gli eventi del mio locale
+    // ristoratore: solo il suo locale. Noi: quello scelto nella tendina (o tutti).
     if (SLUG) {
-      const {data:loc} = await sb.from("locali").select("id").eq("slug",SLUG).single();
+      const {data:loc} = await sb.from("locali").select("id").eq("slug",SLUG).maybeSingle();
       if (loc) q = q.eq("locale_id", loc.id);
+    } else {
+      const scelto = document.getElementById("localeSel").value;
+      if (scelto) q = q.eq("locale_id", scelto);
     }
     const f = document.getElementById("filtro").value;
     if (f) q = q.eq("tipo", f);
@@ -100,7 +114,7 @@ async function carica() {
       <div class="riga ${classe(e.tipo)}">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span class="tipo">${esc(e.tipo)}</span>
-          ${!SLUG ? `<span class="locale">${esc(nomeLocale(e.locale_id))}</span>` : ""}
+          <span class="locale">${esc(nomeLocale(e.locale_id))}</span>
           <span style="font-weight:600">${esc(e.messaggio||"")}</span>
           <span class="quando" style="margin-left:auto">${new Date(e.creato_il).toLocaleString("it-IT")}</span>
         </div>
@@ -113,7 +127,7 @@ async function carica() {
 // sottotitolo: dico subito se sto guardando un locale solo o tutti
 document.getElementById("sott").textContent = SLUG
   ? "Eventi del locale: " + SLUG
-  : "Log GLOBALE — tutti i clienti (vista Pezzanera)";
+  : "Vista Pezzanera — scegli un locale dalla tendina o guardali tutti insieme";
 carica();
 </script>
 </body></html>
