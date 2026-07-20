@@ -107,6 +107,22 @@ button{border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:p
       <div id="listaTavoli" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
 
+    <!-- ETICHETTE PERSONALIZZABILI -->
+    <div class="card">
+      <h2>🏷️ Etichette</h2>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">
+        Come chiamare (e colorare) le due evidenziazioni dei piatti. I piatti marcati
+        <b>Best Seller</b> su Pienissimo finiscono da soli tra i "preferiti",
+        quelli marcati <b>Novità</b> tra gli "in evidenza".
+      </p>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+        <div><label>Nome per "Preferiti" (★)</label><input id="lblFav" placeholder="Preferiti"></div>
+        <div><label>Colore</label><input id="lblFavCol" type="color" style="height:42px;padding:4px"></div>
+        <div><label>Nome per "In evidenza"</label><input id="lblEvid" placeholder="In evidenza"></div>
+        <div><label>Colore</label><input id="lblEvidCol" type="color" style="height:42px;padding:4px"></div>
+      </div>
+    </div>
+
     <!-- BANNER -->
     <div class="card">
       <h2>📢 Banner pubblicità</h2>
@@ -117,7 +133,17 @@ button{border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:p
       <div class="grid2">
         <div style="grid-column:1/3"><label>URL immagine (metti il link diretto all'immagine)</label><input id="banimg" placeholder="https://…/promo.jpg"></div>
         <div><label>Testo sovrapposto (opzionale)</label><input id="bantesto"></div>
-        <div><label>Link al tocco (opzionale)</label><input id="banlink" placeholder="https://…"></div>
+        <div><label>Al tocco porta a…</label>
+          <select id="bandest" onchange="aggiornaDest()">
+            <option value="">Niente</option>
+            <option value="url">Un link esterno</option>
+            <option value="categoria">Una categoria del menù</option>
+            <option value="prodotto">Un piatto specifico</option>
+          </select>
+        </div>
+        <div id="destUrl" style="display:none"><label>Link esterno</label><input id="banlink" placeholder="https://…"></div>
+        <div id="destCat" style="display:none"><label>Categoria</label><select id="bancat"></select></div>
+        <div id="destProd" style="display:none"><label>Piatto</label><select id="banprod"></select></div>
       </div>
       <div id="banPreview" style="margin-top:12px"></div>
     </div>
@@ -226,6 +252,19 @@ function logout() {
 
 // ---- popola form ----
 function val(id, v) { const el=document.getElementById(id); if(!el)return; if(el.type==="checkbox")el.checked=!!v; else el.value=v??"";}
+// mostra solo il campo della destinazione scelta per il banner
+function aggiornaDest(){
+  const d = document.getElementById("bandest").value;
+  document.getElementById("destUrl").style.display  = d==="url" ? "" : "none";
+  document.getElementById("destCat").style.display  = d==="categoria" ? "" : "none";
+  document.getElementById("destProd").style.display = d==="prodotto" ? "" : "none";
+}
+function popolaDestOptions(){
+  const cats=[]; MENU.forEach(p=>{ if(!cats.includes(p.cat)) cats.push(p.cat); });
+  document.getElementById("bancat").innerHTML  = cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  document.getElementById("banprod").innerHTML = MENU.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+}
+
 function popolaForm() {
   const G = CONF.global||{}, cop = CONF.coperti||{}, ban = CONF.banner||{}, ca = CONF.chiusuraAuto||{};
   val("brand", CONF.brand||LOC.nome); val("formula", CONF.formula||"");
@@ -234,6 +273,16 @@ function popolaForm() {
   val("copatt", cop.attivo);
   val("caatt", ca.attivo); val("camin", ca.minuti||120);
   val("banatt", ban.attivo); val("banimg", ban.img||""); val("bantesto", ban.testo||""); val("banlink", ban.link||"");
+  const et = CONF.etichette||{};
+  val("lblFav",  (et.preferiti&&et.preferiti.testo)||"Preferiti");
+  val("lblFavCol",(et.preferiti&&et.preferiti.colore)||"#E0A100");
+  val("lblEvid", (et.evidenza&&et.evidenza.testo)||"In evidenza");
+  val("lblEvidCol",(et.evidenza&&et.evidenza.colore)||"#E0A100");
+  popolaDestOptions();
+  val("bandest", ban.dest || (ban.link?"url":""));
+  if(ban.dest==="categoria") val("bancat", ban.destValore||"");
+  if(ban.dest==="prodotto")  val("banprod", ban.destValore||"");
+  aggiornaDest();
   document.getElementById("banimg").addEventListener("input", aggiornaBanPreview);
   aggiornaBanPreview();
   caricaTavoli();
@@ -297,7 +346,14 @@ async function salva() {
     global: {tempoTavoloMin:+v("tt").value||100, cooldownMin:+v("cd").value||0, maxPezziPerGiro:+v("mp").value||8, maxPezziScope:v("mps").value},
     coperti: {attivo: v("copatt").checked},
     chiusuraAuto: {attivo: v("caatt").checked, minuti: +v("camin").value||120},
-    banner: {attivo:v("banatt").checked, img:v("banimg").value, testo:v("bantesto").value, link:v("banlink").value},
+    banner: {attivo:v("banatt").checked, img:v("banimg").value, testo:v("bantesto").value, link:v("banlink").value,
+             dest:v("bandest").value,
+             destValore: v("bandest").value==="categoria" ? v("bancat").value
+                        : v("bandest").value==="prodotto" ? v("banprod").value : ""},
+    etichette: {
+      preferiti: {testo:v("lblFav").value||"Preferiti",   colore:v("lblFavCol").value||"#E0A100"},
+      evidenza:  {testo:v("lblEvid").value||"In evidenza",colore:v("lblEvidCol").value||"#E0A100"},
+    },
     regole, preferiti, evidenza
   };
   try {
